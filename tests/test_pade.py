@@ -21,6 +21,7 @@ class TestPade(unittest.TestCase):
         """
         p_pade = Pade.plain(mpn, 1, 1)
         r_pade = Pade.robust(mpn, 1, 1)
+        print(p_pade(1))
         Ep = p_pade(1)+Emp0
         Er = r_pade(1)+Emp0
         print(Ep,Er)
