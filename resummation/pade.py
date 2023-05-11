@@ -1,6 +1,6 @@
 import numpy as np
+import mpmath as mpm
 import itertools as it
-from scipy.linalg import toeplitz
 
 class Pade(object):
     """A Pade approximant P(M,N) of a truncated Taylor series.
@@ -109,7 +109,7 @@ class Pade(object):
         return func
 
     @classmethod
-    def plain(cls, coeffs, M, N, tol=0):
+    def build(cls, input, M, N, tol=10e-8):
         """Approximant Pade coefficients from Taylor series coefficients.
 
         Parameters
@@ -138,15 +138,21 @@ class Pade(object):
         pade : Pade
             Instance of Pade class.
         """
-        if not (isinstance(coeffs, np.ndarray)
-            and coeffs.ndim == 1
-            and coeffs.dtype == float
-        ):
-            raise TypeError("Coefficients must be a one-dimensional `numpy` array with `dtype` float.")
+        from types import LambdaType
         if not (isinstance(M, int) and isinstance(N, int)):
             raise TypeError("Order M and N given must be integer.")
-        if coeffs.shape[0] < (M+N+1):
+        elif isinstance(input, LambdaType):
+            coeffs = mpm.taylor(input,tol,M+N+1)
+            coeffs = np.array([float(coeff) for coeff in coeffs])
+        elif (isinstance(input, np.ndarray)
+            and input.ndim == 1
+            and input.dtype == float
+        ):
+            coeffs = input
+        elif coeffs.shape[0] < (M+N+1):
             raise ValueError("Number of coefficients must be higher than order of approximant + 1.")
+        else:
+            raise TypeError("Input must be LambdaType function or a one-dimensional `numpy` array with `dtype` float.")
 
         if M <= N:
             C = np.zeros((N, N))
@@ -201,141 +207,6 @@ class Pade(object):
         pade = cls(coeffs, M, N, a, b, tol)
         return pade
 
-    @classmethod
-    def robust(cls, coeffs, M, N, tol=1e-14):
-        """Approximant Pade coefficients from Taylor series coefficients.
-
-        Parameters
-        ----------
-        coeffs : np.ndarray
-            Expansion coefficients of the divergent serie.
-
-        M : int
-            Order of the numerator.
-
-        N : int
-            Order of the denominator.
-
-        Raises
-        ------
-        TypeError
-            If `coefficients` is not a 1-dimensional `numpy` array with `dtype` float.
-            If `order` is not an integer.
-
-        ValueError
-            If dimension of `coefficients` is less than N + 1. Nth order Meijer-G requires N + 1
-            coefficients of the serie.        
-
-        Returns
-        -------
-        pade : Pade
-            Instance of Pade class.
-        """
-        if not (isinstance(coeffs, np.ndarray)
-            and coeffs.ndim == 1
-            and coeffs.dtype == float
-        ):
-            raise TypeError("Coefficients must be a one-dimensional `numpy` array with `dtype` float.")
-        if not (isinstance(M, int) and isinstance(N, int)):
-            raise TypeError("Order M and N given must be integer.")
-        if coeffs.shape[0] < (M+N+1):
-            raise ValueError("Number of coefficients must be higher than order of approximant + 1.")
-
-        eps = np.finfo(np.float).eps
-
-        def discard_trailing_epsilon(v):
-            if np.abs(v)[-1] <= tol:
-                return v[ : np.where( np.abs(v) > tol )[0][-1] + 1 ]
-            else:
-                return v
-    
-        #  Make sure c is long enough but not longer than necessary.
-        c = coeffs[:M + N + 1]
-        if len(c) < M + N + 1:
-            c = np.pad(coeffs, (0, M + N + 1 - len(c)), 'constant')
-    
-        #  Compute absolute tolerance.
-        ts = tol*np.linalg.norm(c)
-    
-        ## Compute the Pade approximation.
-
-        # check for the special case r = 0
-        if ( np.linalg.norm(c[0:M+1], np.inf) <= tol*np.linalg.norm(c, np.inf) ):
-            a = 0
-            b = 1
-            mu = -np.inf
-            nu = 0
-        else:
-            ## the general case
-    
-            #  First row/column of Toeplitz matrix.
-            row = np.zeros(N+1)
-            row[0] = c[0]
-            col = c
-    
-            #  Do diagonal hopping across block.
-            while True:
-                #  Special case n == 0.
-                if N == 0:
-                    a = c[0:M+1]
-                    b = 1
-                    break
-    
-                #  Form Toeplitz matrix.
-                Z = toeplitz(col[0:M+N+1], row[0:N+1])
-    
-                #  Compute numerical rank.
-                C = Z[M+1:M+N+1,:]
-                rho = np.sum(np.linalg.svd(C, compute_uv=False ) > ts)
-                if rho == N:
-                    break
-    
-                #  Decrease mn, n if rank-deficient.
-                M = M - (N - rho)
-                N = rho
-    
-            #  Hopping finished. Now compute b and a.
-            if N > 0:
-                U, S, V = np.linalg.svd(C)
-
-                #  Null vector gives b.
-                b = V[:,N]
-    
-                #  Do final computation via reweighted QR for better zero preservation.
-                D = np.diag(np.abs(b) + np.sqrt(eps))
-                Q, R = np.linalg.qr( np.transpose( np.matmul(C,D) ), mode='complete' )
-    
-                #  Compensate for reweighting.
-                b = np.matmul(D,Q)[:,N]
-                b = b/np.linalg.norm(b)
-    
-                #  Multiplying gives a.
-                a = np.dot( Z[0:M+1,0:N+1], b )
-    
-                #  Count leading zeros of b.
-                lam = np.argmax( np.abs(b) > tol )
-    
-                #  Discard leading zeros of b and a.
-                b = b[lam:]
-                a = a[lam:]
-    
-                #  Discard trailing zeros of b.
-                b = discard_trailing_epsilon(b)
-    
-            #  Discard trailing zero coefficients in a.
-            a = discard_trailing_epsilon(a)
-    
-            #  Normalize.
-            a = a/b[0]
-            b = b/b[0]
-    
-            #  Exact numerator, denominator degrees.
-            mu = len(a)
-            nu = len(b)
-
-        pade = cls(coeffs, mu, nu, a, b, tol)
-        return pade
-
     @property
     def poles(self):
         """Singularity of the pade function.
@@ -373,7 +244,7 @@ class Pade(object):
         residues : np.1darray
             Residues of the Pade function.
         """
-        poles = self.poles()
+        poles = self.poles
         # Perturbation for residue estimate
         t = max(self.tol,1e-7)
         residues = []

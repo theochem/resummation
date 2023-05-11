@@ -46,16 +46,16 @@ class MeijerG(object):
         y = self.y
         p = self.p
         q = self.q
-        l = x.size
+        l = len(x)
 
         # Meijer-G approximant: Generate the approximant by using a Laplace transform.
         approximant = 1
         for i in range(l):
             approximant *= mpm.gamma(-y[i])/mpm.gamma(-x[i])
         # transform arrays to list for meijerg function, given m=l+2, n=1, p=l+1, and q=l+2
-        # a = [1, -y_1, ..., -y_l]
+        # a = [[1], -y_1, ..., -y_l]]
         a = [[1], np.ndarray.tolist(-y)]
-        # b = [1, 1, -x_1, ..., -x_l]
+        # b = [[1, 1, -x_1, ..., -x_l],[]]
         x = np.insert(-x, 0, [1, 1])
         b = [np.ndarray.tolist(x), []]
         z = -q[l]/(p[l] * g)
@@ -72,7 +72,7 @@ class MeijerG(object):
         return approximant
 
     @classmethod
-    def build(cls, coeffs, order):
+    def build(cls, input, order, tol=10e-8):
         """Evaluate the MeijerG Nth order approximant of a serie Z(g) \sim \sum_{n=0}^{\infty}.
 
         Parameters
@@ -98,15 +98,21 @@ class MeijerG(object):
         meijerg : MeijerG 
             Instance of MeijerG class.
         """
-        if not (isinstance(coeffs, np.ndarray)
-            and coeffs.ndim == 1
-            and coeffs.dtype == float
+        from types import LambdaType
+        if not isinstance(order, int):
+            raise TypeError("Order given must be integer.")
+        elif isinstance(input, LambdaType):
+            coeffs = mpm.taylor(input,tol,order+1)
+            coeffs = np.array([float(coeff) for coeff in coeffs])
+        elif (isinstance(input, np.ndarray)
+            and input.ndim == 1
+            and input.dtype == float
         ):
-            raise TypeError("Coefficients must be a one-dimensional `numpy` array with `dtype` float.")
-        if not (isinstance(order, int)):
-            raise TypeError("Order given must be an integer.")
-        if coeffs.shape[0] < (order + 1):
+            coeffs = input
+        elif coeffs.shape[0] < (order+1):
             raise ValueError("Number of coefficients must be higher than order of approximant + 1.")
+        else:
+            raise TypeError("Input must be LambdaType function or a one-dimensional `numpy` array with `dtype` float.")
 
         # For odd orders
         tmp_coeffs = coeffs.copy()
@@ -158,3 +164,20 @@ class MeijerG(object):
 
         meijerg = cls(coeffs, order, x, y, p, q)
         return meijerg
+
+    @property
+    def hyper(self):
+        """_summary_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+        l = len(self.x)
+        a = np.insert(-self.x,0,1)
+        b = -self.y
+        p = self.p[l]
+        q = self.q[l]
+        func = lambda x: mpm.hyper(a.tolist(), b.tolist(), p/q*x)
+        return func

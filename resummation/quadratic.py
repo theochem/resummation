@@ -1,9 +1,11 @@
 import numpy as np
 import mpmath as mpm
-import copy
+import itertools as it
+from scipy.linalg import matmul_toeplitz, qr, solve_toeplitz, toeplitz
 
-class BorelPade(object):
-    """A Borel Pade approximant BP(M,N) of a function or truncated Taylor series.
+
+class QuadraticPade(object):
+    """A Pade approximant P(M,N) of a truncated Taylor series.
 
     Attributes
     ----------
@@ -27,11 +29,11 @@ class BorelPade(object):
 
     Methods
     -------
-    __init__(self, coeffs, M, N, a, b, tol)
+    __init__(self, M, N, coeffs, a, b)
         Initilize the instance.
 
-    __call__(self, z)
-        Call the borel pade function.
+    __call__(self, x)
+        Call the pade function.
 
     Properties
     ----------
@@ -46,10 +48,13 @@ class BorelPade(object):
 
     ClassMethods
     ------------
-    build(cls, input, M, N, tol=10e-8)
-        Build the Borel Pade instance.
+    plain(cls, M, N, coeffs, tol=0)
+        Plain Pade approximant.
+
+    robust(cls, M, N, coeffs, tol=10e-14)
+        Robust Pade approximant.
     """
-    def __init__(self, coeffs, M, N, a, b, tol):
+    def __init__(self, coeffs, L, M, N, p, q, r, tol):
         """Initilize the instance.
 
         Parameters
@@ -57,26 +62,34 @@ class BorelPade(object):
         coeffs : np.ndarray
             Expansion coefficients of the divergent serie.
 
+        L : int
+            Order of the numerator.
+
         M : int
             Order of the numerator.
 
         N : int
             Order of the denominator.
 
-        a : np.ndarray
+        p : np.ndarray
             Expansion coefficients of the numerator.
 
-        b : np.ndarray
+        q : np.ndarray
+            Expansion coefficients of the dinominator.
+
+        r : np.ndarray
             Expansion coefficients of the dinominator.
         
         tol: float
-            Tolerance of the borel pade method.
+            Tolerance of the pade method.
         """
         self.coeffs = coeffs
+        self.L = L
         self.M = M
         self.N = N
-        self.a = a
-        self.b = b
+        self.p = p
+        self.q = q
+        self.r = r
         self.tol = tol
 
     def __call__(self, z):
@@ -97,25 +110,30 @@ class BorelPade(object):
         func
             Pade functiion.
         """
-        from scipy.integrate import quad
-        if not (isinstance(z, (int, float, complex))):
-            raise TypeError("Parameter z must be int float or compelex numbr.")
-        a, b = self.a, self.b
-        a = [*reversed(a)]
-        b = [*reversed(b)]
-        func = lambda t : np.exp(-t)*self.pade(z*t)
-        val, err = quad(func, 0,np.inf)
-        result = complex(float(val),float(err))
-        return result
+        if not (isinstance(z, (int, float))):
+            raise TypeError("Parameter z must be int or float.")
+        p,q,r = self.p,self.q,self.r        
+        p = np.array([*reversed(p)])
+        q = np.array([*reversed(q)])
+        r = np.array([*reversed(r)])
+        PL = np.polyval(p, z) 
+        QM = np.polyval(q, z)
+        RN = np.polyval(r, z)
+        plus = (-QM + np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
+        minus = (-QM - np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
+        return plus,minus
 
     @classmethod
-    def build(cls, input, M, N, tol=10e-8):
+    def build(cls, an, p_deg, q_deg, r_deg, tol=10e-8):
         """Approximant Pade coefficients from Taylor series coefficients.
 
         Parameters
         ----------
         coeffs : np.ndarray
             Expansion coefficients of the divergent serie.
+
+        L : int
+            Order of the numerator.
 
         M : int
             Order of the numerator.
@@ -135,68 +153,35 @@ class BorelPade(object):
 
         Returns
         -------
-        bp : BorelPade
-            Instance of BorelPade class.
+        pade : Pade
+            Instance of Pade class.
         """
-        from types import LambdaType
-        from resummation.pade import Pade
+        an = np.asarray(an)
+        assert an.ndim == 1
+        l_max = r_deg + q_deg + p_deg + 2
+        if an.size < l_max:
+            raise ValueError("Order of r+q+p (r_deg+q_deg+p_deg) must be smaller than len(an).")
+        an = an[:l_max]
+        full_amat = toeplitz(an, r=np.zeros_like(an))
+        amat2 = (full_amat@full_amat[:, :r_deg+1])
+        amat = full_amat[:, :q_deg+1]
+        lower = np.concatenate((amat[p_deg+1:, :], amat2[p_deg+1:, :]), axis=-1)
+        q_, __ = qr(lower.conj().T, mode='full')
+        qrcoeff = q_[:, -1]
+        assert qrcoeff.size == r_deg + q_deg + 2
+        upper = np.concatenate((amat[:p_deg+1, :], amat2[:p_deg+1, :]), axis=-1)
+        pcoeff = -upper@qrcoeff
 
-        if not (isinstance(M, int) and isinstance(N, int)):
-            raise TypeError("Order M and N given must be integer.")
-        elif isinstance(input, LambdaType):
-            coeffs = mpm.taylor(input,tol,M+N+1)
-            coeffs = np.array([float(coeff) for coeff in coeffs])
-        elif (isinstance(input, np.ndarray)
-            and input.ndim == 1
-            and input.dtype == float
-        ):
-            coeffs = input
-        elif coeffs.shape[0] < (M+N+1):
-            raise ValueError("Number of coefficients must be higher than order of approximant + 1.")
-        else:
-            raise TypeError("Input must be LambdaType function or a one-dimensional `numpy` array with `dtype` float.")
+        p = pcoeff 
+        q = qrcoeff[:q_deg+1] 
+        r = qrcoeff[q_deg+1:]
+        q_pade = cls(an, p_deg, q_deg, r_deg, p, q, r, tol)
+        return q_pade
 
-        # The Borel transform of original polynoimal is a degree (K − 1) polynomial.
-        borel_coeffs = copy.deepcopy(coeffs)
-        for k, coeff in enumerate(coeffs):
-            borel_coeffs[k] = coeff/mpm.factorial(k)
-            
-        pade = Pade.build(borel_coeffs, M, N, tol)
-        a,b = pade.a, pade.b
-        a = np.array([float(i) for i in a])
-        b = np.array([float(i) for i in b])
-        bp = cls(coeffs, M, N, a, b, tol)
-        
-        return bp
-
-    @property
-    def pade(self):
-        """Pade summation in the Borel plane
-
-        Parameters
-        ----------
-        z : _type_
-            _description_
-
-        Returns
-        -------
-        _type_
-            _description_
-
-        Raises
-        ------
-        TypeError
-            _description_
-        """
-        a, b = self.a, self.b
-        a = [*reversed(a)]
-        b = [*reversed(b)]
-        func = lambda t : mpm.polyval(a, t) / mpm.polyval(b, t)        
-        return func
 
     @property
     def poles(self):
-        """Singularity of the borel pade function.
+        """Singularity of the pade function.
 
         Returns
         -------
@@ -238,4 +223,5 @@ class BorelPade(object):
         for pole in poles:
             residues.append(t*(self(pole+t)-self(pole-t))/2)
         residues = np.array(residues)
-        return residues        
+        return residues
+

@@ -19,25 +19,21 @@ class TestPade(unittest.TestCase):
     def test_pade(self):
         """Compare palin pade with robust pade.
         """
-        p_pade = Pade.plain(mpn, 1, 1)
-        r_pade = Pade.robust(mpn, 1, 1)
+        p_pade = Pade.build(mpn, (1, 1), tol=10e-8)
+        n_pade = Pade.build(mpn, 2, tol=10e-8)
         print(p_pade(1))
+        print(n_pade(1))
         Ep = p_pade(1)+Emp0
-        Er = r_pade(1)+Emp0
-        print(Ep,Er)
-        np.testing.assert_allclose(Ep, Er, rtol=1e-6)
+        En = n_pade(1)+Emp0
+        np.testing.assert_allclose(Ep, En, rtol=1e-6)
 
     def test_pade_table(self):
         p_table = np.zeros((4,4))
-        r_table = np.zeros((4,4))
-        for m in range(4)[0:]:
-            for n in range(4)[1:]:
-                p_pade = Pade.plain(mpn, m, n)
-                r_pade = Pade.robust(mpn, m, n)
+        for m in range(4):
+            for n in range(4):
+                p_pade = Pade.build(mpn, (m+1, n+1), tol=10e-8)
                 p_table[m,n] = p_pade(1)+Emp0
-                r_table[m,n] = r_pade(1)+Emp0
         print(p_table)
-        print(r_table)
 
 
 
