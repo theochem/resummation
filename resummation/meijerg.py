@@ -1,4 +1,3 @@
-
 import mpmath as mpm
 import numpy as np
 from scipy.linalg import lstsq
@@ -72,7 +71,7 @@ class MeijerG(object):
         return approximant
 
     @classmethod
-    def build(cls, input, order, tol=10e-8):
+    def build(cls, coeffs, order, tol=10e-8):
         """Evaluate the MeijerG Nth order approximant of a serie Z(g) \sim \sum_{n=0}^{\infty}.
 
         Parameters
@@ -83,36 +82,27 @@ class MeijerG(object):
         order : int
             Order N of the Meijer-G approximant.
 
-        Raises
-        ------
-        TypeError
-            If `coefficients` is not a 1-dimensional `numpy` array with `dtype` float.
-            If `order` is not an integer.
-
-        ValueError
-            If dimension of `coefficients` is less than N + 1. Nth order Meijer-G requires N + 1
-            coefficients of the serie.
-
         Returns
         -------
         meijerg : MeijerG 
             Instance of MeijerG class.
         """
         from types import LambdaType
+
         if not isinstance(order, int):
-            raise TypeError("Order given must be integer.")
-        elif isinstance(input, LambdaType):
-            coeffs = mpm.taylor(input,tol,order+1)
+            raise TypeError("The given order must be integer.")
+
+        if hasattr(coeffs, "__iter__"):
+            if len(coeffs) < (order+1):
+                raise ValueError("Number of coefficients must be higher than order+1.")
+            else:
+                coeffs = np.asarray(coeffs)
+                coeffs = coeffs[:(order+1)]
+        elif isinstance(coeffs, LambdaType):
+            coeffs = mpm.taylor(coeffs,tol,order+1)
             coeffs = np.array([float(coeff) for coeff in coeffs])
-        elif (isinstance(input, np.ndarray)
-            and input.ndim == 1
-            and input.dtype == float
-        ):
-            coeffs = input
-        elif coeffs.shape[0] < (order+1):
-            raise ValueError("Number of coefficients must be higher than order of approximant + 1.")
         else:
-            raise TypeError("Input must be LambdaType function or a one-dimensional `numpy` array with `dtype` float.")
+            raise TypeError("Input coefficients must be iterator or LambdaType function.")
 
         # For odd orders
         tmp_coeffs = coeffs.copy()
