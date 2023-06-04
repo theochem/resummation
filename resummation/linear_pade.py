@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 
 class LinearPade(object):
-    """A Pade approximant P(M,N) of a truncated Taylor series.
+    """A linear Pade approximant of order L, M for a truncated Taylor series.
 
     Attributes
     ----------

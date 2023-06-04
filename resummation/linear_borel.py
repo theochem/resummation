@@ -85,16 +85,16 @@ class LinearBorel(object):
         func
             Pade function.
         """
-        mpm.mp.dps = 15; mpm.mp.pretty = True
-        from scipy.integrate import quad
+        import scipy as sp
+
         if not (isinstance(z, (int, float, complex))):
             raise TypeError("Parameter z must be int float or compelex numbr.")
         a, b = self.a, self.b
         a = [*reversed(a)]
         b = [*reversed(b)]
-        pade = lambda t : -mpm.polyval(a,t)/mpm.polyval(b,t)
-        func = lambda t : mpm.exp(-t)* pade(z*t)
-        val = mpm.quad(func, [0, np.inf])
+        pade = lambda t : -np.polyval(a,t)/np.polyval(b,t)
+        func = lambda t : np.exp(-t)* pade(z*t)
+        val = sp.integrate.quad(func, 0, np.inf)
         return val
 
     @classmethod

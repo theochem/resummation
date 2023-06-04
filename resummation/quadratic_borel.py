@@ -1,4 +1,5 @@
 import numpy as np
+import cmath
 import mpmath as mpm
 import copy
 
@@ -74,7 +75,7 @@ class QuadraticBorel(object):
         self.r = r
         self.tol = tol
 
-    def __call__(self, z):
+    def __call__(self, z, func='plus'):
         """Call the pade function.
 
         Parameters
@@ -92,23 +93,28 @@ class QuadraticBorel(object):
         func
             Pade functiion.
         """
-        mpm.mp.dps = 15; mpm.mp.pretty = True
+        import scipy as sp
         if not (isinstance(z, (int, float, complex))):
             raise TypeError("Parameter z must be int float or compelex numbr.")
         p, q, r = self.p, self.q, self.r
         p = [*reversed(p)]
         q = [*reversed(q)]
         r = [*reversed(r)]
-        PL = lambda t : mpm.polyval(p,t)
-        QM = lambda t : mpm.polyval(q,t)
-        RN = lambda t : mpm.polyval(r,t)
-        pade_plus = lambda t : (-QM(t) + np.sqrt(QM(t)**2 - 4*PL(t)*RN(t)))/(2*RN(t))
-        func_plus = lambda t : mpm.exp(-t)*pade_plus(z*t)
-        pade_minus = lambda t : (-QM(t) - np.sqrt(QM(t)**2 - 4*PL(t)*RN(t)))/(2*RN(t))
-        func_minus = lambda t : mpm.exp(-t)*pade_minus(z*t)
-        val_plus = mpm.quad(func_plus, [0, np.inf])
-        val_minus = mpm.quad(func_minus, [0, np.inf])
-        return val_plus, val_minus
+        PL = lambda t : np.polyval(p,t)
+        QM = lambda t : np.polyval(q,t)
+        RN = lambda t : np.polyval(r,t)
+        if func=='plus':
+            pade = lambda t : (-QM(t) + np.sqrt(QM(t)**2 - 4*PL(t)*RN(t)))/(2*RN(t))
+            func = lambda t : np.exp(-t)*pade(z*t)
+            val,error = sp.integrate.quad(func, 0, np.inf, complex_func=True)
+        elif func=='minus':
+            pade = lambda t : (-QM(t) - np.sqrt(QM(t)**2 - 4*PL(t)*RN(t)))/(2*RN(t))
+            func = lambda t : np.exp(-t)*pade(z*t)
+            val,error = sp.integrate.quad(func, 0, np.inf, complex_func=True)
+        else:
+            raise ValueError("Function parameter must be plus or minus.")
+        
+        return val, error.real
 
     @classmethod
     def build(cls, input, L, M, N, tol=10e-8):
@@ -166,5 +172,49 @@ class QuadraticBorel(object):
         
         return bqp
 
+    @property
+    def zeros(self):
+        """Zeros of the pade function.
 
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        p = self.p
+        p = np.array([*reversed(p)])
+        zeros = np.roots(p)
+        return zeros
 
+    @property
+    def poles(self):
+        """Singularity of the pade function.
+
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        r = self.r
+        r = np.array([*reversed(r)])
+        poles = np.roots(r)
+        return poles
+
+    @property
+    def branchs(self):
+        """Square root branch of the.
+
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        p = self.p
+        q = self.q
+        r = self.r
+        p = np.array([*reversed(p)])
+        q = np.array([*reversed(q)])
+        r = np.array([*reversed(r)])
+        d = q**2-4*p*r
+        branchs = np.roots(d)
+        return branchs

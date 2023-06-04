@@ -46,7 +46,7 @@ class QuadraticPade(object):
         self.q = q
         self.r = r
 
-    def __call__(self, z):
+    def __call__(self, z, func='plus'):
         """Call the pade function.
 
         Parameters
@@ -67,7 +67,7 @@ class QuadraticPade(object):
         minus : float
             Quadratic Pade approximants Pade F-.
         """
-        if not (isinstance(z, (int, float))):
+        if not (isinstance(z, (int, float, complex))):
             raise TypeError("Parameter z must be int or float.")
 
         p,q,r = self.p,self.q,self.r        
@@ -77,9 +77,14 @@ class QuadraticPade(object):
         PL = np.polyval(p, z) 
         QM = np.polyval(q, z)
         RN = np.polyval(r, z)
-        plus = (-QM + np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
-        minus = (-QM - np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
-        return plus, minus
+        if func=='plus':
+            val = (-QM + np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
+        elif func=='minus':
+            val = (-QM - np.sqrt(QM**2 - 4*PL*RN))/(2*RN)
+        else:
+            raise ValueError("Function parameter must be plus or minus.")
+        
+        return val
 
     @classmethod
     def build(cls, coeffs, L, M, N, tol=1e-8):
@@ -144,4 +149,49 @@ class QuadraticPade(object):
         q_pade = cls(p, q, r)
         return q_pade
 
+    @property
+    def zeros(self):
+        """Zeros of the pade function.
 
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        p = self.p
+        p = np.array([*reversed(p)])
+        zeros = np.roots(p)
+        return zeros
+
+    @property
+    def poles(self):
+        """Singularity of the pade function.
+
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        r = self.r
+        r = np.array([*reversed(r)])
+        poles = np.roots(r)
+        return poles
+
+    @property
+    def branchs(self):
+        """Square root branch of the.
+
+        Returns
+        -------
+        poles : np.1darray
+            Poles of the Pade function.
+        """
+        p = self.p
+        q = self.q
+        r = self.r
+        p = np.array([*reversed(p)])
+        q = np.array([*reversed(q)])
+        r = np.array([*reversed(r)])
+        d = q**2-4*p*r
+        branchs = np.roots(d)
+        return branchs
