@@ -1,7 +1,7 @@
 Resummation
 ===========
 
-Perturbation series (really any Taylor series) can be resummed to infinite order. This package offer several resummation methods to do this, ranging from Pade, Borel-Pade and Meijer G. 
+Perturbation series (really any Taylor series) can be resummed to infinite order. This package offer several resummation methods to do this, including Pade, Borel-Pade and Meijer G resummation techniques.
 
 Installation
 ------------
@@ -15,10 +15,10 @@ Installation
 
 * Compile from source
 
-      git clone https://github.com/ZhaoYilin/resummation.git
+      git clone https://github.com/theochem/resummation.git
       cd resummation
       python3 -m pip install -e .
 
 * Using pip to install python package on GitHub
 
-      pip install git+https://github.com/ZhaoYilin/resummation
+      pip install git+https://github.com/theochem/resummation
