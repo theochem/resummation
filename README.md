@@ -26,4 +26,4 @@ Installation
 Quick Start
 -----------
 
-To have quick start of using resummation package, please check the examples in the [An](https://github.com/theochem/resummation/tree/master/example)
+To have quick start of using resummation package, please check the case in the [example folder](https://github.com/theochem/resummation/tree/master/example).
